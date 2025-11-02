@@ -53,7 +53,6 @@ export class AuthService {
             throw new UnauthorizedException("User not Found");
 
         }
-
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
             throw new UnauthorizedException("Invalid Password");
