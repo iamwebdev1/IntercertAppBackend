@@ -1,34 +1,29 @@
-import { RefreshToken } from "src/auth/auth.enity";
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { RefreshToken } from 'src/auth/auth.enity';
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
-
-
-
+export enum UserRole {
+  ADMIN = 'admin',
+  USER = 'user',
+}
 
 @Entity()
 export class User {
-
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column()
   name: string;
 
-  @Column()
+  @Column({ unique: true })
   email: string;
 
   @Column()
   password: string;
 
-  @Column({ default: "user" }) // "admin" or "user"
-  userType: string;
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
+  userRole: UserRole;
 
-
-
-  // @OneToMany(() => RefreshToken, (refreshToken) => refreshToken.user, {
-  //   cascade: true, // optional: automatically save refresh tokens when user is saved
-  // })
-  // refreshTokens: RefreshToken[];
-
+  @OneToMany(() => RefreshToken, refreshToken => refreshToken.user)
+  refreshTokens: RefreshToken[];
 
 }

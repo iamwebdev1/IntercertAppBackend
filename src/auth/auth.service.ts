@@ -4,77 +4,100 @@ import { UserService } from "src/user/user.service";
 import * as bcrypt from 'bcrypt';
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { RefreshToken } from "./auth.enity";
-import { OAuth2Client } from "google-auth-library";
 
+import { OAuth2Client } from "google-auth-library";
+import { RefreshToken } from "./auth.enity";
 
 @Injectable()
 export class AuthService {
+    private googleClient = new OAuth2Client(
+        '1013646318751-gcqtdrjunfmbbjsku8l8uo2vqclcqe4f.apps.googleusercontent.com'
+    );
 
-    private client = new OAuth2Client('1013646318751-gcqtdrjunfmbbjsku8l8uo2vqclcqe4f.apps.googleusercontent.com');
-
-    constructor(private userService: UserService,
-        private jwtService: JwtService,
+    constructor(
+        private readonly userService: UserService,
+        private readonly jwtService: JwtService,
         @InjectRepository(RefreshToken)
-        private refreshTokenRepo: Repository<RefreshToken>,
+        private readonly refreshTokenRepo: Repository<RefreshToken>,
     ) { }
 
-
-
+    // ✅ Google Login Handler
     async validateGoogleUser(idToken: string) {
-        const ticket = await this.client.verifyIdToken({
+        const ticket = await this.googleClient.verifyIdToken({
             idToken,
             audience: '1013646318751-gcqtdrjunfmbbjsku8l8uo2vqclcqe4f.apps.googleusercontent.com',
         });
 
         const payload = ticket.getPayload();
-        if (!payload) throw new UnauthorizedException('Invalid Google token');
+        if (!payload) {
+            throw new UnauthorizedException('Invalid Google token');
+        }
 
-        const email: string = payload.email || '';
-        if (!email.toLowerCase().endsWith('@intercert.com')) {
+        const email = payload.email?.toLowerCase() || '';
+        if (!email.endsWith('@intercert.com')) {
             throw new UnauthorizedException('Only @intercert.com accounts allowed');
         }
-
-
-
-        // Optional: return JWT token to frontend
-        const token = this.jwtService.sign({ email, name: payload.name });
-        return { token, email, name: payload.name };
-    }
-
-    async revokeRefreshToken(token: string) {
-        // Example: remove the refresh token row from DB
-        await this.refreshTokenRepo.delete({ token });
-    }
-
-    async Login(email: string, password: string) {
-        const user = await this.userService.findByEmail(email);
+        let user = await this.userService.findByEmail(email);
         if (!user) {
-            throw new UnauthorizedException("User not Found");
-
-        }
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            throw new UnauthorizedException("Invalid Password");
+            throw new UnauthorizedException('User not found');
         }
 
-        //jwt token process
-        const payload = { sub: user.id, email: user.email };
-        const token = await this.jwtService.signAsync(payload);
+        const jwtPayload = { sub: user.id, email: user.email, userRole: user.userRole };
+        const token = await this.jwtService.signAsync(jwtPayload, {
+            secret: 'intercert-secret-key',
+            expiresIn: '1d',
+        });
+
 
         return {
-            message: "Login Successfully",
-            access_tocken: token,
+            message: 'Google login successful',
+            access_token: token,
             user: {
                 id: user.id,
                 name: user.name,
-                email: user.email
-            }
-        }
+                email: user.email,
+            },
+        };
     }
 
+    // ✅ Logout handler — revoke refresh token if present
+    async revokeRefreshToken(token: string) {
+        await this.refreshTokenRepo.delete({ token });
+    }
+
+    // ✅ Normal email-password login
+    async login(email: string, password: string) {
+        const user = await this.userService.findByEmail(email);
+        if (!user) {
+            throw new UnauthorizedException('User not found');
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+            throw new UnauthorizedException('Invalid password');
+        }
+
+        // ✅ Generate JWT with same secret as JwtStrategy
+        const payload = { sub: user.id, email: user.email, userRole: user.userRole };
+        console.log('JWT Payload:', payload);
+        const accessToken = await this.jwtService.signAsync(payload, {
+            secret: 'intercert-secret-key', // ✅ MUST MATCH JwtStrategy secret
+            expiresIn: '1d',
+        });
+
+        return {
+            message: 'Login successful',
+            access_token: accessToken,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+            },
+        };
+    }
+
+    // ✅ Helper for JwtStrategy
     async validateUser(email: string) {
         return this.userService.findByEmail(email);
     }
-
 }

@@ -11,13 +11,13 @@ import { RefreshToken } from "./auth.enity";
 
 
 @Module({
-    imports: [    TypeOrmModule.forFeature([User, RefreshToken]),UserModule, PassportModule, JwtModule.register({
+    imports: [TypeOrmModule.forFeature([User, RefreshToken]), UserModule, PassportModule, JwtModule.register({
         secret: 'intercert-secret-key',
-        signOptions: { expiresIn: '1h' }
+        signOptions: { expiresIn: '1d' }
     })],
     controllers: [AuthController],
     providers: [AuthService, JwtStrategy],
-    exports: [],
+    exports: [AuthService, JwtModule],
 
 })
 
